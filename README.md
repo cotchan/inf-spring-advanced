@@ -14,6 +14,12 @@
     - [템플릿 메서드 패턴 구조 그림](#템플릿-메서드-패턴-구조-그림)
     - [템플릿 메서드 패턴 - 정의](#템플릿-메서드-패턴---정의)
     - [템플릿 메서드 패턴 - 단점](#템플릿-메서드-패턴---단점)
+5. [전략 패턴](#전략-패턴)
+    - [전략 패턴 - 핵심](#전략-패턴---핵심)
+    - [전략 패턴 - 템플릿 메서드 패턴과 차이점](#전략-패턴---템플릿-메서드-패턴과-차이점)
+    - [전략 패턴 - 선 조립 후 실행방식](#전략-패턴---선-조립-후-실행방식)
+    - [전략 패턴 - 파라미터 전달 방식](#전략-패턴---파라미터-전달-방식)
+    - [전략 패턴 - 정리](#전략-패턴---정리)
 
 ## Spring-tip
 
@@ -149,3 +155,150 @@ public abstract class AbstractTemplate {
   - 코드 상에 명확히 `extends AbstractTemplate` 의존에 걸려버림 
 
 #### 템플릿 메서드 패턴과 비슷한 역할을 하면서 상속의 단점을 제거할 수 있는 디자인 패턴이 바로 전략 패턴(Strategy Pattern)
+
+## 전략 패턴
+
+- 전략 패턴은 변하지 않는 부분을 `Context`라는 곳에 두고, 변하는 부분을 `Strategy`라는 인터페이스를 만들고 해당 인터페이스를 구현하도록 해서 문제를 해결한다.
+- 상속이 아니라 `위임으로 문제를 해결`한다.
+- 전략 패턴에서 `Context`는 `변하지 않는 템플릿 역할`을 하고, `Strategy`는 변하는 알고리즘 역할을 한다.
+
+<img width="700" alt="스크린샷 2023-03-05 오후 6 19 39" src="https://user-images.githubusercontent.com/75410527/222952168-0f8b07f8-31a6-4db8-873d-bc7574646122.png">
+
+### 전략 패턴 - 핵심
+
+- 전략 패턴의 핵심은 `Context`는 `Strategy` 인터페이스에만 의존한다는 점이다.
+- 덕분에 `Strategy`의 구현체를 변경하거나 새로 만들어도 `Context` 코드에는 영향을 주지 않는다.
+- 이게 바로 `스프링 의존관계 주입에서 사용하는 방식`인 `전략 패턴`이다.
+
+> Strategy.java
+
+```java
+public interface Strategy {
+    void call();
+}
+```
+
+> StrategyLogic1.java
+
+```java
+@Slf4j
+public class StrategyLogic1 implements Strategy {
+    @Override
+    public void call() {
+        log.info("비즈니스 로직1 실행");
+    }
+}
+```
+
+> StrategyLogic2.java
+
+```java
+@Slf4j
+public class StrategyLogic2 implements Strategy {
+    @Override
+    public void call() {
+        log.info("비즈니스 로직2 실행");
+    }
+}
+```
+
+> ContextV1.java
+
+```java
+/**
+ * 필드에 전략을 보관하는 방식
+ *
+ * ContextV1은 변하지 않는 로직을 가지고 있는 템플릿 역할을 하는 코드
+ * 전략 패턴에서는 이것을 컨텍스트(문맥)이라 한다.
+ */
+@Slf4j
+public class ContextV1 {
+
+    private Strategy strategy;
+
+    public ContextV1(Strategy strategy) {
+        this.strategy = strategy;
+    }
+
+    public void execute() {
+        long startTime = System.currentTimeMillis();
+        //비즈니스 로직 실행
+        strategy.call();    //위임
+        //비즈니스 로직 종료
+        long endTime = System.currentTimeMillis();
+        long resultTime = endTime - startTime;
+        log.info("resultTime = {}", resultTime);
+    }
+}
+```
+
+> ContextV2.java
+
+```java
+/**
+ * 전략을 파라미터로 전달받는 방식
+ *
+ * ContextV2는 변하지 않는 로직을 가지고 있는 템플릿 역할을 하는 코드
+ * 전략 패턴에서는 이것을 컨텍스트(문맥)이라 한다.
+ */
+@Slf4j
+public class ContextV2 {
+
+    public void execute(Strategy strategy) {
+        long startTime = System.currentTimeMillis();
+        //비즈니스 로직 실행
+        strategy.call();    //위임
+        //비즈니스 로직 종료
+        long endTime = System.currentTimeMillis();
+        long resultTime = endTime - startTime;
+        log.info("resultTime = {}", resultTime);
+    }
+}
+```
+
+### 전략 패턴 - 템플릿 메서드 패턴과 차이점
+
+- 템플릿 메서드 패턴과 가지는 큰 차이점은, Strategy의 구현체가 `상속이 아닌 위임에 영향을 받는다`는 점 
+  - Strategy의 구현체가 템플릿 메서드 패턴에서는 상속을 받으니까 부모 클래스의 코드가 바뀌면 얘가 영향을 받았음
+  - 그러나 전략 패턴에서는 Strategy의 구현체가 `Strategy`라는 굉장히 단순한 인터페이스에만 영향을 받음 (`인터페이스에만 의존`)
+- 그래서 Context 코드가 바뀌든 말든 구현체는 영향을 전혀 받지 않음 
+
+### 전략 패턴 - 선 조립 후 실행방식
+
+- 여기서 이야기하고 싶은 부분은 `Context`의 내부 필드에 `Strategy`를 두고 사용하는 부분이다.
+- 이 방식은 `Context`와 `Strategy`를 실행전에 원하는 모양으로 조립해두고, 그 다음에 `Context`를 실행하는 선 조립, 후 실행 방식에서 매우 유용하다.
+- `Context`와 `Strategy`를 한 번 조립하고 나면 이후로는 `Context`를 실행하기만 하면 된다.
+- 이 방식의 단점은 `Context`와 `Strategy`를 조립한 이후에는 전략을 변경하기가 번거롭다는 점이다.
+
+<img width="700" alt="스크린샷 2023-03-05 오후 7 09 42" src="https://user-images.githubusercontent.com/75410527/222954201-807a551f-f676-437c-b25d-2ab241a66fe0.png">
+
+
+### 전략 패턴 - 파라미터 전달 방식
+
+- `Context`와 `Strategy`를 '선 조립 후 실행'하는 방식이 아니라 `Context`를 실행할 때마다 전략을 인수로 전달한다.
+- 클라이언트는 `Context`를 실행하는 시점에 원하는 `Strategy`를 전달할 수 있다. 따라서 이전 방식과 비교해서 원하는 전략을 더욱 유연하게 변경할 수 있다.
+
+```java
+@Slf4j
+public class ContextV2Test {
+    /**
+     * 전략 패턴 사용
+     */
+    @Test
+    void strategyV1() {
+        ContextV2 context = new ContextV2();
+        context.execute(new StrategyLogic1());
+        context.execute(new StrategyLogic2());
+    }
+}
+```
+
+<img width="700" alt="스크린샷 2023-03-05 오후 6 59 03" src="https://user-images.githubusercontent.com/75410527/222954138-97739a11-da03-4056-97c2-5b6b774689a7.png">
+
+
+### 전략 패턴 - 정리
+
+- 변하지 않는 부분을 `Context`에 두고 변하는 부분을 `Strategy`를 구현해서 만든다.
+
+<img width="700" alt="스크린샷 2023-03-05 오후 6 59 49" src="https://user-images.githubusercontent.com/75410527/222954129-007180d9-cf6a-4342-878c-2508b95c860c.png">
+
