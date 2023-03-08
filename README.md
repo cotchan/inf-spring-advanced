@@ -20,6 +20,10 @@
     - [전략 패턴 - 선 조립 후 실행방식](#전략-패턴---선-조립-후-실행방식)
     - [전략 패턴 - 파라미터 전달 방식](#전략-패턴---파라미터-전달-방식)
     - [전략 패턴 - 정리](#전략-패턴---정리)
+6. [템플릿 콜백 패턴](#템플릿-콜백-패턴)
+    - [콜백이란](#콜백이란)
+    - [스프링의 템플릿 콜백 패턴](#스프링의-템플릿-콜백-패턴)
+    - [여전히 남아있는 한계점](#여전히-남아있는-한계점)
 
 ## Spring-tip
 
@@ -302,3 +306,70 @@ public class ContextV2Test {
 
 <img width="700" alt="스크린샷 2023-03-05 오후 6 59 49" src="https://user-images.githubusercontent.com/75410527/222954129-007180d9-cf6a-4342-878c-2508b95c860c.png">
 
+## 템플릿 콜백 패턴
+
+- `ContextV2`는 변하지 않는 템플릿 역할을 한다. 그리고 변하는 부분은 파라미터로 넘어온 `Strategy`의 코드를 실행해서 처리한다.
+- 이렇게 `다른 코드의 인수로서 넘겨주는 실행 가능한 코드`를 콜백(`callback`)이라 한다.
+
+```java
+/**
+ * 전략을 파라미터로 전달받는 방식
+ *
+ * ContextV2는 변하지 않는 로직을 가지고 있는 템플릿 역할을 하는 코드
+ * 전략 패턴에서는 이것을 컨텍스트(문맥)이라 한다.
+ */
+@Slf4j
+public class ContextV2 {
+
+    public void execute(Strategy strategy) {
+        long startTime = System.currentTimeMillis();
+        //비즈니스 로직 실행
+        strategy.call();    //위임
+        //비즈니스 로직 종료
+        long endTime = System.currentTimeMillis();
+        long resultTime = endTime - startTime;
+        log.info("resultTime = {}", resultTime);
+    }
+}
+```
+
+```java
+public class ContextV2Test {
+    /**
+     * 익명 내부 클래스 사용방식 + 람다
+     */
+    @Test
+    void strategyV3() {
+        ContextV2 context = new ContextV2();
+        //execute에 내가 실행할 코드 조각을 넘긴다
+        context.execute(() -> log.info("비즈니스 로직1 실행"));
+        context.execute(() -> log.info("비즈니스 로직2 실행"));
+    }
+}
+```
+
+### 콜백이란
+
+- 콜백이란, 다른 코드의 인수로서 넘겨주는 실행 가능한 코드를 말한다.
+- 콜백을 넘겨받는 코드(`ContextV2`)는 이 콜백을 필요에 따라서 즉시 실행할 수도 있고, 아니면 나중에 실행할 수도 있다.
+- 쉽게 이야기해서 콜백은 코드가 호출(`call`)은 되는데 코드를 넘겨준 곳의 뒤(`back`)에서 실행된다는 뜻이다. 
+  - ContextV2 예제에서 콜백은 `Strategy`이다.
+  - 여기에서는 클라이언트에서 직접 `Strategy`를 실행하는 것이 아니라, 클라이언트가 `ContextV2.execute(...)`를 실행할 때 `Strategy`를 넘겨주고, `ContextV2` 뒤에서 `Strategy`가 실행된다.
+
+### 스프링의 템플릿 콜백 패턴
+
+- 스프링에서는 `ContextV2`와 같은 방식의 전략 패턴을 템플릿 콜백 패턴이라 한다.
+  - 전략 패턴에서 `Context`가 템플릿 역할을 하고, `Strategy` 부분이 콜백으로 넘어온다 생각하면 된다.
+  - 템플릿 콜백 패턴은 GOF 패턴은 아니고, 스프링 내부에서 이런 방식을 자주 사용하기 때문에, `스프링 안에서만 이렇게 부른다.`
+  - 전략 패턴에서 템플릿과 콜백 부분이 강조된 패턴이라 생각하면 된다.
+  - 스프링에서는 `JdbcTemplate`, `RestTemplate`, `TransactionTemplate`, `RedisTemplate`처럼 다양한 템플릿 콜백 패턴이 사용된다.
+  - 스프링에서 이름에 `XxxTemplate`이 있다면 템플릿 콜백 패턴으로 만들어져 있다 생각하면 된다.
+
+<img width="700" alt="스크린샷 2023-03-08 오후 8 24 29" src="https://user-images.githubusercontent.com/75410527/223708294-dc9f52a6-5d81-4a29-a8fb-b79b434f273b.png">
+
+### 여전히 남아있는 한계점
+
+- `지금까지 위에서 설명한 방식의 한계`는 아무리 최적화를 해도 `결국 로그 추적기를 적용하기 위해서 원본 코드를 수정해야 한다는 점`이다.
+- 클래스가 수백개이면 수백개를 더 힘들게 수정하는가 조금 덜 힘들게 수정하는가의 차이가 있을 뿐, 본질적으로 코드를 다 수정해야 하는 것은 마찬가지이다.
+- 개발자의 게으름에 대한 욕심은 끝이 없다. 수 많은 개발자가 이 문제에 대해서 집요하게 고민해왔고, 여러가지 방향으로 해결책을 만들어왔다.
+- 지금부터 원본 코드를 손대지 않고 로그 추적기를 적용할 수 있는 방법에 대해 알아보자. 그러기 위해서 프록시 개념을 먼저 이해해야 한다.
